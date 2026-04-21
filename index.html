@@ -552,11 +552,11 @@
     50% { opacity: 0.3; }
   }
   .ns-main {
-    display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px;
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: nowrap; margin-bottom: 2px;
   }
   .ns-time {
-    font-size: 24px; font-weight: 800; letter-spacing: -0.02em;
-    font-family: 'JetBrains Mono', monospace; line-height: 1;
+    font-size: 26px; font-weight: 800; letter-spacing: -0.02em;
+    font-family: 'JetBrains Mono', monospace; line-height: 1; flex-shrink: 0;
   }
   .ns-card.on-shift .ns-time { color: #fff; }
   .ns-card.today .ns-time { color: #fff; }
@@ -564,8 +564,18 @@
   .ns-card.future .ns-time { color: var(--text); }
   .ns-time-label {
     font-size: 10px; font-weight: 600; color: var(--text-dim);
-    text-transform: uppercase; letter-spacing: 0.06em;
+    text-transform: uppercase; letter-spacing: 0.06em; flex-shrink: 0;
   }
+  .ns-detail-row {
+    font-size: 11px; color: var(--text-dim);
+    display: flex; align-items: baseline; gap: 3px; flex-wrap: nowrap;
+    margin-left: auto; text-align: right; justify-content: flex-end; white-space: nowrap;
+  }
+  .ns-detail-row strong { color: var(--text); font-weight: 700; }
+  .ns-dot { color: var(--text-faint); }
+  .ns-divider { color: var(--text-faint); font-size: 12px; }
+  .ns-detail { font-size: 12px; color: var(--text-dim); }
+  .ns-detail strong { color: var(--text); font-weight: 700; }
   .ns-sub {
     font-size: 12px; color: var(--text-dim); margin-top: 4px;
     display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
@@ -1284,14 +1294,15 @@ function offKind(posType) {
 const GROUP_DISPLAY_NAMES = {
   'FT md':      'Full Time',
   'PT md':      'Part Time',
-  'EA19FT md':  'EA19 Full Time',
-  'EA19PT md':  'EA19 Part Time',
+  'EA19FT md':  'Full Time',
+  'EA19PT md':  'Part Time',
   'GMF md':     'Goods Motor Frame',
   'TR md':      'Tram Repair',
   'YARD md':    'Yard',
 };
 function getVisibleGroups() {
-  return Object.keys(ROSTER_DATA.rotations).filter(g => !g.endsWith(' at'));
+  // Only show Full Time and Part Time — hide GMF, TR, YARD, EA19FT
+  return ['FT md', 'EA19PT md'].filter(g => ROSTER_DATA.rotations[g]);
 }
 
 // --- Rendering ---
@@ -1307,11 +1318,12 @@ function renderSetup(isReset) {
   }
   const groupSel = document.getElementById('setup-group');
   groupSel.innerHTML = '';
+  const currentGroup = state.group || 'FT md'; // default to Full Time
   getVisibleGroups().forEach(g => {
     const opt = document.createElement('option');
     opt.value = g;
     opt.textContent = GROUP_DISPLAY_NAMES[g] || g;
-    if (g === state.group) opt.selected = true;
+    if (g === currentGroup) opt.selected = true;
     groupSel.appendChild(opt);
   });
   populatePositions();
@@ -1478,22 +1490,24 @@ function renderNextShift() {
     innerHTML = `
       <div class="ns-label"><span class="ns-pulse"></span>${labelText}</div>
       <div class="ns-date-line">${dateStr}</div>
-      <div class="ns-sub">On call — check GIRO for assignments</div>`;
+      <div class="ns-sub">On call — check Self Service for assignments</div>`;
   } else if (targetTiming.hasShift && duty) {
     const typeLabel = targetTiming.posType || 'Custom';
     const workLabel = `${targetTiming.workH}h${String(targetTiming.workM).padStart(2,'0')}`;
+    const timeDisplay = state_label === 'on-shift' ? signOffDisplay : signOnDisplay;
+    const timeTag = state_label === 'on-shift' ? 'off' : 'on';
     innerHTML = `
       <div class="ns-label"><span class="ns-pulse"></span>${labelText} ${countdownHTML}</div>
       <div class="ns-date-line">${dateStr}</div>
       <div class="ns-main">
-        <span class="ns-time">${state_label === 'on-shift' ? signOffDisplay : signOnDisplay}</span>
-        <span class="ns-time-label">${state_label === 'on-shift' ? 'sign off' : 'sign on'}</span>
-      </div>
-      <div class="ns-sub">
-        <span>Duty <strong>${targetTiming.dutyNum}</strong></span>
-        <span>${typeLabel}</span>
-        <span>${workLabel} work</span>
-        ${state_label !== 'on-shift' ? `<span>Off <strong>${signOffDisplay}</strong></span>` : ''}
+        <span class="ns-time">${timeDisplay}</span>
+        <span class="ns-time-label">${timeTag}</span>
+        <span class="ns-detail-row">
+          Duty <strong>${targetTiming.dutyNum}</strong>
+          <span class="ns-dot">·</span>${typeLabel}
+          <span class="ns-dot">·</span>${workLabel}
+          ${state_label !== 'on-shift' ? `<span class="ns-dot">·</span>Off <strong>${signOffDisplay}</strong>` : ''}
+        </span>
       </div>`;
   }
 
@@ -1853,6 +1867,7 @@ function renderMonth() {
 
   const todayISO = fmtISO(new Date());
   let totalMins = 0, workDays = 0, offDays = 0;
+  const reliefWeekSet = new Set(); // track unique relief week Sundays
   let lastRowWeek = -1;
 
   for (let i = 0; i < 42; i++) {
@@ -1920,8 +1935,10 @@ function renderMonth() {
         body = `${ovDot}${swapDot}<div class="md">${d.getDate()}</div><div class="mg-off">OFF</div>`;
       } else if (oKind === 'relief') {
         body = `${ovDot}${swapDot}<div class="md">${d.getDate()}</div><div class="mg-relief">RELIEF</div>`;
+        if (inMonth) reliefWeekSet.add(fmtISO(startOfWeek(d)));
       } else if (oKind === 'dummy') {
         body = `${ovDot}${swapDot}<div class="md">${d.getDate()}</div><div class="mg-relief dummy">DUMMY</div>`;
+        if (inMonth) reliefWeekSet.add(fmtISO(startOfWeek(d)));
       } else if (oKind === 'pld') {
         body = `${ovDot}${swapDot}<div class="md">${d.getDate()}</div><div class="mg-off">PLD</div>`;
       } else {
@@ -1959,12 +1976,17 @@ function renderMonth() {
   });
   container.appendChild(legend);
 
-  renderSummary(totalMins, workDays);
+  renderSummary(totalMins, workDays, reliefWeekSet.size);
 }
 
-function renderSummary(totalMins, workDays) {
+function renderSummary(totalMins, workDays, reliefWeeks = 0) {
   const h = Math.floor(totalMins / 60);
   const m = totalMins % 60;
+  const reliefNote = reliefWeeks > 0
+    ? `<div style="grid-column:1/-1; font-size:11px; color:var(--text-dim); padding:2px 4px;">
+        + ${reliefWeeks} relief week${reliefWeeks > 1 ? 's' : ''} not counted — check Self Service for assignments
+       </div>`
+    : '';
   document.getElementById('summary').innerHTML = `
     <div class="sum-card">
       <div class="sum-label">Work days</div>
@@ -1978,6 +2000,7 @@ function renderSummary(totalMins, workDays) {
       <div class="sum-label">Avg shift</div>
       <div class="sum-value">${workDays ? (totalMins/workDays/60).toFixed(1) : '0.0'}<span style="font-size:14px; color:var(--text-dim)">h</span></div>
     </div>
+    ${reliefNote}
   `;
 }
 
