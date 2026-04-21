@@ -498,7 +498,7 @@
 
   /* Next shift card */
   .ns-card {
-    border-radius: var(--radius); padding: 12px 16px;
+    border-radius: var(--radius); padding: 16px 18px;
     margin-bottom: 14px; position: relative; overflow: hidden;
     cursor: pointer; transition: transform 0.1s;
   }
@@ -530,7 +530,7 @@
   }
   .ns-label {
     font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
-    text-transform: uppercase; margin-bottom: 5px;
+    text-transform: uppercase; margin-bottom: 8px;
     display: flex; align-items: center; gap: 8px;
   }
   .ns-card.on-shift .ns-label { color: var(--accent-bright); }
@@ -552,10 +552,10 @@
     50% { opacity: 0.3; }
   }
   .ns-main {
-    display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px;
+    display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px;
   }
   .ns-time {
-    font-size: 24px; font-weight: 800; letter-spacing: -0.02em;
+    font-size: 36px; font-weight: 800; letter-spacing: -0.03em;
     font-family: 'JetBrains Mono', monospace; line-height: 1;
   }
   .ns-card.on-shift .ns-time { color: #fff; }
@@ -563,25 +563,25 @@
   .ns-card.tomorrow .ns-time,
   .ns-card.future .ns-time { color: var(--text); }
   .ns-time-label {
-    font-size: 10px; font-weight: 600; color: var(--text-dim);
+    font-size: 11px; font-weight: 600; color: var(--text-dim);
     text-transform: uppercase; letter-spacing: 0.06em;
   }
   .ns-sub {
-    font-size: 12px; color: var(--text-dim); margin-top: 4px;
-    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    font-size: 13px; color: var(--text-dim); margin-top: 6px;
+    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
   }
   .ns-sub strong { color: var(--text); font-weight: 700; }
   .ns-countdown {
-    font-size: 11px; font-weight: 600;
+    font-size: 12px; font-weight: 600;
     background: rgba(255,255,255,0.08); border-radius: 6px;
-    padding: 2px 7px; margin-left: auto; flex-shrink: 0;
+    padding: 3px 8px; margin-left: auto; flex-shrink: 0;
     font-family: 'JetBrains Mono', monospace;
   }
   .ns-card.on-shift .ns-countdown { color: var(--accent-bright); }
   .ns-card.today .ns-countdown { color: var(--day); }
   .ns-date-line {
     font-size: 13px; font-weight: 700; color: var(--text);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
   }
 
   /* Swaps view */
@@ -935,15 +935,8 @@
         <select id="setup-position"></select>
       </div>
       <div class="field">
-        <label>Roster start date <span style="font-weight:400;text-transform:none;letter-spacing:0">(the Sunday your MTT period began)</span></label>
+        <label>Roster start date <span style="font-weight:400;text-transform:none;letter-spacing:0">(must be a Sunday)</span></label>
         <input type="date" id="setup-start">
-        <div id="sunday-hint" style="display:none; margin-top:6px; font-size:12px; padding:8px 10px; border-radius:8px; background:rgba(240,165,0,0.12); border:1px solid var(--day); color:var(--day);">
-          ⚠ That's not a Sunday — roster periods always start on Sunday.
-          <span id="sunday-suggest" style="font-weight:700; cursor:pointer; text-decoration:underline;"></span>
-        </div>
-        <div style="margin-top:6px; font-size:12px; color:var(--text-dim);">
-          Current roster (MTT26a) started <strong style="color:var(--text)">Sun 12 Apr 2026</strong>
-        </div>
       </div>
 
       <button class="btn" id="setup-save">Save &amp; view my roster</button>
@@ -1316,8 +1309,7 @@ function renderSetup(isReset) {
   });
   populatePositions();
   groupSel.onchange = populatePositions;
-  document.getElementById('setup-start').value = state.startDate || '2026-04-12';
-  document.getElementById('sunday-hint').style.display = 'none';
+  document.getElementById('setup-start').value = state.startDate || '';
   // Sync theme toggle state
   const isLight = document.documentElement.getAttribute('data-theme') === 'light';
   const toggle = document.getElementById('theme-toggle');
@@ -2506,44 +2498,15 @@ document.getElementById('plan-swap-btn').addEventListener('click', () => {
   openSwapModal(fmtISO(startOfWeek(anchor)));
 });
 
-// Live Sunday validation on date picker
-document.getElementById('setup-start').addEventListener('change', () => {
-  const val = document.getElementById('setup-start').value;
-  const hint = document.getElementById('sunday-hint');
-  const suggest = document.getElementById('sunday-suggest');
-  if (!val) { hint.style.display = 'none'; return; }
-  const d = parseISODate(val);
-  if (d.getDay() === 0) {
-    hint.style.display = 'none'; // it's a Sunday, all good
-    return;
-  }
-  // Not a Sunday — find nearest Sunday (go back to most recent Sunday)
-  const nearestSun = startOfWeek(d);
-  const sunStr = fmtISO(nearestSun);
-  const sunLabel = `${DAY_LONG[nearestSun.getDay()]} ${nearestSun.getDate()} ${MONTH_SHORT[nearestSun.getMonth()]} ${nearestSun.getFullYear()}`;
-  suggest.textContent = ` Use ${sunLabel} instead`;
-  hint.style.display = 'block';
-  // Clicking the suggestion auto-corrects the date
-  suggest.onclick = () => {
-    document.getElementById('setup-start').value = sunStr;
-    hint.style.display = 'none';
-  };
-});
-
 document.getElementById('setup-save').addEventListener('click', () => {
   const group = document.getElementById('setup-group').value;
   const pos = parseInt(document.getElementById('setup-position').value, 10);
-  let start = document.getElementById('setup-start').value;
-  if (!start) {
-    alert('Please enter the roster start date.');
-    document.getElementById('setup-start').focus();
-    return;
-  }
-  // Auto-correct to nearest Sunday if they somehow still picked a non-Sunday
+  const start = document.getElementById('setup-start').value;
+  // Must be a Sunday
   const sd = parseISODate(start);
   if (sd.getDay() !== 0) {
-    start = fmtISO(startOfWeek(sd));
-    document.getElementById('setup-start').value = start;
+    alert('Roster start date must be a Sunday. MTT periods begin on Sunday.');
+    return;
   }
   state.group = group;
   state.position = pos;
