@@ -1865,12 +1865,32 @@ function renderPositions() {
           }).join('') + `</div>`;
       }
 
+      // Calculate total worked minutes from roster data
+      let workedMins = 0;
+      if (!isRelief && pos.d) {
+        Object.values(pos.d).forEach(day => {
+          if (day && day.type === 'duty') workedMins += (day.h || 0) * 60 + (day.m || 0);
+        });
+      }
+      const workedH = Math.floor(workedMins / 60);
+      const workedM = workedMins % 60;
+      const workedStr = workedMins > 0 ? `${workedH}h${String(workedM).padStart(2,'0')}` : null;
+
+      const paid = ROSTER_PAID_HOURS[pos.p];
+      const hoursBar = (!isRelief && (workedStr || paid)) ? `
+        <div style="display:flex;gap:8px;margin-top:3px;font-size:11px;font-family:'JetBrains Mono',monospace;">
+          ${workedStr ? `<span style="color:var(--text-dim)">work <span style="color:var(--text);font-weight:700">${workedStr}</span></span>` : ''}
+          ${workedStr && paid ? `<span style="color:var(--line)">·</span>` : ''}
+          ${paid ? `<span style="color:var(--text-dim)">paid <span style="color:var(--accent-bright);font-weight:700">${paid}</span></span>` : ''}
+        </div>` : '';
+
       row.innerHTML = `
         <div class="pos-row-header">
           <span class="pos-row-num">P${pos.p}</span>
-          <span class="pos-row-type">${pos.t}</span>
+          <span class="pos-row-type" style="margin-left:4px">${pos.t}</span>
           ${isMe ? '<span style="font-size:10px;color:var(--accent-bright);font-weight:700;margin-left:auto;">YOU</span>' : ''}
         </div>
+        ${hoursBar}
         ${dayCols}
       `;
 
@@ -2043,7 +2063,9 @@ function renderWeek() {
     container.appendChild(card);
   }
 
-  renderSummary(totalMins, workDays);
+  const weekPos = getPositionForDate(start);
+  const weekPosNum = weekPos ? weekPos.p : null;
+  renderSummary(totalMins, workDays, 0, weekPosNum);
 }
 
 function renderMonth() {
@@ -2253,10 +2275,43 @@ function renderMonth() {
   });
   container.appendChild(legend);
 
-  renderSummary(totalMins, workDays, reliefWeekSet.size);
+  const monthPos = getPositionForDate(new Date(year, month, 1));
+  renderSummary(totalMins, workDays, reliefWeekSet.size, null);
 }
 
-function renderSummary(totalMins, workDays, reliefWeeks = 0) {
+// ─── Roster Paid Hours Lookup (sourced directly from MTT26a master roster) ──
+// Values are the official PAID hours per week for each position number.
+// Source: MTT26a-Roster ToD-ES04, Sheet "FT at" and "EA19FT at" and "TR at"
+const ROSTER_PAID_HOURS = {
+  1:'46h40', 2:'48h44', 4:'48h10', 5:'49h25', 6:'53h15',
+  8:'56h23', 9:'55h56', 10:'54h51', 11:'55h36', 14:'57h30',
+  15:'57h47', 16:'51h44', 18:'51h59', 19:'52h28', 21:'48h37',
+  22:'48h43', 23:'49h00', 24:'49h55', 26:'48h28', 27:'55h08',
+  28:'51h44', 29:'56h08', 30:'54h26', 32:'49h18', 33:'59h16',
+  35:'51h56', 36:'57h54', 38:'58h24', 39:'53h16', 41:'48h45',
+  43:'45h34', 45:'45h41', 46:'53h14', 47:'54h40', 48:'53h05',
+  50:'52h32', 51:'56h03', 52:'51h29', 54:'52h41', 55:'56h44',
+  56:'57h52', 58:'50h05', 59:'53h18', 61:'49h11', 62:'49h13',
+  63:'55h23', 65:'48h52', 66:'54h56', 67:'55h56', 68:'53h47',
+  70:'56h44', 73:'49h30', 74:'52h19', 75:'48h52', 77:'50h36',
+  78:'58h26', 79:'53h24', 81:'47h33', 84:'48h02', 85:'56h28',
+  86:'52h19', 88:'48h21', 89:'54h07', 90:'55h09', 91:'49h30',
+  92:'57h08', 94:'50h50', 95:'55h41', 97:'52h01', 98:'51h40',
+  99:'54h26', 101:'47h44', 102:'47h28', 103:'55h28', 105:'48h39',
+  106:'51h23', 107:'49h12', 109:'49h23', 110:'54h20', 112:'56h01',
+  113:'56h57', 114:'43h46', 116:'48h12', 117:'46h00', 118:'50h14',
+  119:'50h50', 121:'51h23', 122:'51h50', 123:'56h23', 125:'48h04',
+  126:'45h22', 128:'44h48', 129:'47h03', 130:'46h21', 132:'51h57',
+  133:'51h52', 134:'58h58', 135:'54h52', 137:'56h01', 139:'51h56',
+  140:'57h12', 141:'57h46', 142:'57h05', 144:'58h35', 145:'51h40',
+  146:'54h42',
+  // EA19FT positions
+  931:'48h26', 936:'45h25', 937:'44h49',
+  // Training positions
+  631:'47h58', 632:'48h45', 633:'52h36', 634:'57h46',
+};
+
+function renderSummary(totalMins, workDays, reliefWeeks = 0, position = null) {
   const h = Math.floor(totalMins / 60);
   const m = totalMins % 60;
   const reliefNote = reliefWeeks > 0
@@ -2264,15 +2319,31 @@ function renderSummary(totalMins, workDays, reliefWeeks = 0) {
         + ${reliefWeeks} relief week${reliefWeeks > 1 ? 's' : ''} not counted — check Self Service for assignments
        </div>`
     : '';
+
+  // Paid hours card — sourced from master roster
+  let paidCard = '';
+  if (position !== null) {
+    const paid = ROSTER_PAID_HOURS[position];
+    if (paid) {
+      const [ph, pm] = paid.split('h');
+      paidCard = `
+    <div class="sum-card" title="Paid hours from MTT26a master roster for position ${position}">
+      <div class="sum-label">Paid hrs</div>
+      <div class="sum-value" style="color:var(--accent-bright)">${ph}<span style="font-size:14px; color:var(--text-dim)">h</span>${pm || '00'}</div>
+    </div>`;
+    }
+  }
+
   document.getElementById('summary').innerHTML = `
     <div class="sum-card">
       <div class="sum-label">Work days</div>
       <div class="sum-value">${workDays}</div>
     </div>
     <div class="sum-card">
-      <div class="sum-label">Hours</div>
+      <div class="sum-label">Rostered hrs</div>
       <div class="sum-value">${h}<span style="font-size:14px; color:var(--text-dim)">h</span>${String(m).padStart(2,'0')}</div>
     </div>
+    ${paidCard}
     <div class="sum-card">
       <div class="sum-label">Avg shift</div>
       <div class="sum-value">${workDays ? (totalMins/workDays/60).toFixed(1) : '0.0'}<span style="font-size:14px; color:var(--text-dim)">h</span></div>
