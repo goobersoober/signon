@@ -1765,13 +1765,13 @@ function renderPositions() {
   const container = document.getElementById('positions-view');
   container.innerHTML = '';
 
-  // Week nav
   const anchor = state.posViewAnchor
     ? parseISODate(state.posViewAnchor)
     : (state.viewWeekAnchor ? parseISODate(state.viewWeekAnchor) : startOfWeek(new Date()));
   const weekEnd = addDays(anchor, 6);
   const rangeStr = `${anchor.getDate()} ${MONTH_SHORT[anchor.getMonth()]} – ${weekEnd.getDate()} ${MONTH_SHORT[weekEnd.getMonth()]} ${anchor.getFullYear()}`;
 
+  // Week nav
   const nav = document.createElement('div');
   nav.className = 'pos-week-nav';
   nav.innerHTML = `
@@ -1780,7 +1780,6 @@ function renderPositions() {
     <button class="nav-btn" id="pos-next">›</button>
   `;
   container.appendChild(nav);
-
   document.getElementById('pos-prev').addEventListener('click', () => {
     state.posViewAnchor = fmtISO(addDays(anchor, -7));
     renderPositions();
@@ -1790,12 +1789,11 @@ function renderPositions() {
     renderPositions();
   });
 
-  // Search box
+  // Search
   const searchBox = document.createElement('input');
-  searchBox.type = 'number';
-  searchBox.inputMode = 'numeric';
+  searchBox.type = 'number'; searchBox.inputMode = 'numeric';
   searchBox.className = 'pos-search';
-  searchBox.placeholder = 'Jump to position number...';
+  searchBox.placeholder = 'Jump to position...';
   searchBox.addEventListener('input', () => renderList(searchBox.value.trim()));
   container.appendChild(searchBox);
 
@@ -1817,61 +1815,60 @@ function renderPositions() {
     listEl.innerHTML = '';
     const group = ROSTER_DATA.rotations['FT md'];
     if (!group) return;
-
-    // Sort positions numerically
     const sorted = [...group].sort((a, b) => a.p - b.p);
-    const filtered = filter
-      ? sorted.filter(p => String(p.p).startsWith(filter))
-      : sorted;
-
+    const filtered = filter ? sorted.filter(p => String(p.p).startsWith(filter)) : sorted;
     if (filtered.length === 0) {
       listEl.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:24px;font-size:13px;">No positions found</div>';
       return;
     }
 
-    filtered.forEach(pos => {
-      // Get what this position is doing the selected week
-      const shifts = DAYS.map(day => {
-        const cell = pos.d[day];
-        return { day, cell };
-      });
+    const myPos = getPositionForDate(anchor);
 
+    filtered.forEach(pos => {
       const oKind = offKind(pos.t);
       const isRelief = oKind === 'relief' || oKind === 'dummy';
+      const isMe = myPos && myPos.p === pos.p;
+      const tc = typeClass(pos.t);
+      const borderColour = tc === 'early' ? 'var(--early)' : tc === 'day-type' ? 'var(--day)' : tc === 'middle' ? 'var(--middle)' : tc === 'late' ? 'var(--late)' : 'var(--line)';
 
       const row = document.createElement('div');
       row.className = 'pos-row' + (isRelief ? ' relief-row' : '');
+      if (!isRelief) row.style.borderLeft = `3px solid ${borderColour}`;
 
-      let typeLabel = pos.t || '';
-      let dayChips = '';
-
+      // Build day columns
+      let dayCols = '';
       if (isRelief) {
-        dayChips = `<span class="pos-day-chip">${oKind === 'dummy' ? 'Dummy Relief' : 'Relief'} week</span>`;
+        dayCols = `<div style="font-size:11px;font-weight:700;color:var(--accent-bright);padding:6px 0;">${oKind === 'dummy' ? 'DUMMY RELIEF' : 'RELIEF'}</div>`;
       } else {
-        dayChips = shifts.map(({ day, cell }) => {
-          if (!cell || cell.type === 'off') {
-            return `<span class="pos-day-chip">${day.substring(0,2)}</span>`;
-          }
-          const tc = typeClass(pos.t);
-          return `<span class="pos-day-chip work ${tc}">${day.substring(0,2)} ${cell.d || '?'}</span>`;
-        }).join('');
+        dayCols = `<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:5px;">` +
+          DAYS.map(day => {
+            const fakeSwap = { theirPosition: pos.p, theirGroup: 'FT md' };
+            const d = addDays(anchor, DAYS.indexOf(day));
+            const shift = getSwapShift(d, fakeSwap);
+            if (!shift || shift.kind === 'off') {
+              return `<div style="flex:1;min-width:38px;text-align:center;padding:3px 0;">
+                <div style="font-size:9px;color:var(--text-faint);font-weight:700">${day.substring(0,2).toUpperCase()}</div>
+                <div style="font-size:9px;color:var(--text-faint)">—</div>
+              </div>`;
+            }
+            const offStr = shift.duty.off.replace('+1','');
+            return `<div style="flex:1;min-width:38px;text-align:center;padding:3px 0;">
+              <div style="font-size:9px;color:var(--text-faint);font-weight:700">${day.substring(0,2).toUpperCase()}</div>
+              <div style="font-size:11px;font-weight:800;font-family:'JetBrains Mono',monospace;color:var(--text)">${shift.dutyNum}</div>
+              <div style="font-size:9px;color:var(--text-dim);line-height:1.3">${shift.duty.on}<br>${offStr}</div>
+            </div>`;
+          }).join('') + `</div>`;
       }
-
-      // Is this my position this week?
-      const myShift = getShiftForDate(anchor);
-      const myPos = myShift ? getPositionForDate(anchor) : null;
-      const isMe = myPos && myPos.p === pos.p;
 
       row.innerHTML = `
         <div class="pos-row-header">
           <span class="pos-row-num">P${pos.p}</span>
-          <span class="pos-row-type">${typeLabel}</span>
+          <span class="pos-row-type">${pos.t}</span>
           ${isMe ? '<span style="font-size:10px;color:var(--accent-bright);font-weight:700;margin-left:auto;">YOU</span>' : ''}
         </div>
-        <div class="pos-row-days">${dayChips}</div>
+        ${dayCols}
       `;
 
-      // Tap to open swap modal for this position's week
       row.addEventListener('click', () => {
         state.currentView = 'week';
         state.viewWeekAnchor = fmtISO(anchor);
@@ -1879,8 +1876,7 @@ function renderPositions() {
           b.classList.toggle('active', b.dataset.view === 'week');
         });
         renderMain();
-        // Pre-fill the swap modal with this position
-        const modal = openSwapModal(fmtISO(anchor));
+        openSwapModal(fmtISO(anchor));
         setTimeout(() => {
           const posInput = document.getElementById('sw-pos');
           if (posInput) posInput.value = pos.p;
