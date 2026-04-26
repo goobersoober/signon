@@ -178,7 +178,7 @@
   }
   .view-toggle button {
     flex: 1; background: transparent; border: none; color: var(--text-dim);
-    padding: 9px; border-radius: 8px; font-size: 13px; font-weight: 600;
+    padding: 9px 4px; border-radius: 8px; font-size: 11px; font-weight: 600;
     font-family: inherit; cursor: pointer;
   }
   .view-toggle button.active { background: var(--bg-elev-2); color: var(--text); }
@@ -676,6 +676,57 @@
     padding: 8px 2px 6px; margin-top: 4px;
   }
 
+  /* Positions view */
+  #positions-view { padding-top: 4px; }
+  .pos-week-nav {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px; gap: 8px;
+  }
+  .pos-week-label {
+    font-size: 13px; font-weight: 700; text-align: center; flex: 1;
+    color: var(--text);
+  }
+  .pos-search {
+    background: var(--bg-elev); border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px 12px; color: var(--text);
+    font-size: 14px; font-family: inherit; width: 100%;
+    margin-bottom: 10px; outline: none;
+    -webkit-appearance: none;
+  }
+  .pos-search:focus { border-color: var(--accent); }
+  .pos-row {
+    background: var(--bg-elev); border: 1px solid var(--line);
+    border-radius: 12px; padding: 11px 14px; margin-bottom: 6px;
+    cursor: pointer; transition: transform 0.1s;
+  }
+  .pos-row:active { transform: scale(0.985); }
+  .pos-row-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+  }
+  .pos-row-num {
+    font-size: 13px; font-weight: 800; font-family: 'JetBrains Mono', monospace;
+    color: var(--text); min-width: 36px;
+  }
+  .pos-row-type {
+    font-size: 11px; font-weight: 600; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .pos-row-days {
+    display: flex; gap: 4px; flex-wrap: wrap;
+  }
+  .pos-day-chip {
+    font-size: 10px; font-family: 'JetBrains Mono', monospace; font-weight: 600;
+    background: var(--bg-elev-2); border-radius: 5px; padding: 3px 6px;
+    color: var(--text-dim);
+  }
+  .pos-day-chip.work { color: var(--text); }
+  .pos-day-chip.early { border-left: 2px solid var(--early); }
+  .pos-day-chip.day-type { border-left: 2px solid var(--day); }
+  .pos-day-chip.middle { border-left: 2px solid var(--middle); }
+  .pos-day-chip.late { border-left: 2px solid var(--late); }
+  .pos-row.relief-row { border-style: dashed; }
+  .pos-row.relief-row .pos-row-type { color: var(--accent-bright); }
+
   /* Settings panel toggle — gear icon active state */
   .settings-btn.active {
     background: var(--accent); color: white; border-color: var(--accent);
@@ -1002,6 +1053,7 @@
       <button data-view="week">Week</button>
       <button data-view="month" class="active">Month</button>
       <button data-view="swaps">Swaps</button>
+      <button data-view="positions">Positions</button>
     </div>
 
     <div class="week-nav" id="week-nav">
@@ -1017,6 +1069,7 @@
     <div id="week-view"></div>
     <div id="month-view" class="hidden"></div>
     <div id="swaps-view" class="hidden"></div>
+    <div id="positions-view" class="hidden"></div>
 
     <div id="summary" class="summary"></div>
   </div>
@@ -1040,13 +1093,14 @@ const MONTH_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'
 let state = {
   group: '',
   position: null,
-  startDate: '',             // must be a Sunday
-  viewWeekAnchor: null,      // Sunday of currently viewed week
-  currentView: 'month',      // 'week' | 'month'
-  viewMonth: null,           // {year, month}
-  notes: {},                 // { 'YYYY-MM-DD': 'text' }
-  overrides: {},             // { 'YYYY-MM-DD': { kind: 'off'|'work', dutyNum?, category? } }
-  swaps: {},                 // { 'YYYY-MM-DD-Sunday': { status, with, note, theirPosition?, theirGroup?, duties? } }
+  startDate: '',
+  viewWeekAnchor: null,
+  posViewAnchor: null,
+  currentView: 'month',
+  viewMonth: null,
+  notes: {},
+  overrides: {},
+  swaps: {},
 };
 
 // --- Persistence ---
@@ -1581,7 +1635,7 @@ function renderMain() {
   const swapBtn = document.getElementById('plan-swap-btn');
   const weekNav = document.getElementById('week-nav');
   swapBtn.style.display = state.currentView === 'week' ? '' : 'none';
-  weekNav.style.display = state.currentView === 'swaps' ? 'none' : '';
+  weekNav.style.display = (state.currentView === 'swaps' || state.currentView === 'positions') ? 'none' : '';
 
   renderNextShift();
 
@@ -1589,17 +1643,27 @@ function renderMain() {
     document.getElementById('week-view').classList.remove('hidden');
     document.getElementById('month-view').classList.add('hidden');
     document.getElementById('swaps-view').classList.add('hidden');
+    document.getElementById('positions-view').classList.add('hidden');
     renderWeek();
   } else if (state.currentView === 'swaps') {
     document.getElementById('week-view').classList.add('hidden');
     document.getElementById('month-view').classList.add('hidden');
     document.getElementById('swaps-view').classList.remove('hidden');
-    document.getElementById('summary').innerHTML = ''; // no stats in swaps view
+    document.getElementById('positions-view').classList.add('hidden');
+    document.getElementById('summary').innerHTML = '';
     renderSwaps();
+  } else if (state.currentView === 'positions') {
+    document.getElementById('week-view').classList.add('hidden');
+    document.getElementById('month-view').classList.add('hidden');
+    document.getElementById('swaps-view').classList.add('hidden');
+    document.getElementById('positions-view').classList.remove('hidden');
+    document.getElementById('summary').innerHTML = '';
+    renderPositions();
   } else {
     document.getElementById('week-view').classList.add('hidden');
     document.getElementById('month-view').classList.remove('hidden');
     document.getElementById('swaps-view').classList.add('hidden');
+    document.getElementById('positions-view').classList.add('hidden');
     renderMonth();
   }
 }
@@ -1695,6 +1759,139 @@ function renderSwaps() {
   if (pendingUpcoming.length) renderGroup(pendingUpcoming, `Pending · ${pendingUpcoming.length} need confirming`);
   if (confirmedUpcoming.length) renderGroup(confirmedUpcoming, 'Confirmed upcoming');
   if (past.length) renderGroup(past, 'Past');
+}
+
+function renderPositions() {
+  const container = document.getElementById('positions-view');
+  container.innerHTML = '';
+
+  // Week nav
+  const anchor = state.posViewAnchor
+    ? parseISODate(state.posViewAnchor)
+    : (state.viewWeekAnchor ? parseISODate(state.viewWeekAnchor) : startOfWeek(new Date()));
+  const weekEnd = addDays(anchor, 6);
+  const rangeStr = `${anchor.getDate()} ${MONTH_SHORT[anchor.getMonth()]} – ${weekEnd.getDate()} ${MONTH_SHORT[weekEnd.getMonth()]} ${anchor.getFullYear()}`;
+
+  const nav = document.createElement('div');
+  nav.className = 'pos-week-nav';
+  nav.innerHTML = `
+    <button class="nav-btn" id="pos-prev">‹</button>
+    <div class="pos-week-label">${rangeStr}</div>
+    <button class="nav-btn" id="pos-next">›</button>
+  `;
+  container.appendChild(nav);
+
+  document.getElementById('pos-prev').addEventListener('click', () => {
+    state.posViewAnchor = fmtISO(addDays(anchor, -7));
+    renderPositions();
+  });
+  document.getElementById('pos-next').addEventListener('click', () => {
+    state.posViewAnchor = fmtISO(addDays(anchor, 7));
+    renderPositions();
+  });
+
+  // Search box
+  const searchBox = document.createElement('input');
+  searchBox.type = 'number';
+  searchBox.inputMode = 'numeric';
+  searchBox.className = 'pos-search';
+  searchBox.placeholder = 'Jump to position number...';
+  searchBox.addEventListener('input', () => renderList(searchBox.value.trim()));
+  container.appendChild(searchBox);
+
+  const listEl = document.createElement('div');
+  listEl.id = 'pos-list';
+  container.appendChild(listEl);
+
+  function typeClass(posType) {
+    if (!posType) return '';
+    const t = posType.toLowerCase();
+    if (t.includes('early')) return 'early';
+    if (t.includes('day')) return 'day-type';
+    if (t.includes('middle')) return 'middle';
+    if (t.includes('late')) return 'late';
+    return '';
+  }
+
+  function renderList(filter) {
+    listEl.innerHTML = '';
+    const group = ROSTER_DATA.rotations['FT md'];
+    if (!group) return;
+
+    // Sort positions numerically
+    const sorted = [...group].sort((a, b) => a.p - b.p);
+    const filtered = filter
+      ? sorted.filter(p => String(p.p).startsWith(filter))
+      : sorted;
+
+    if (filtered.length === 0) {
+      listEl.innerHTML = '<div style="text-align:center;color:var(--text-dim);padding:24px;font-size:13px;">No positions found</div>';
+      return;
+    }
+
+    filtered.forEach(pos => {
+      // Get what this position is doing the selected week
+      const shifts = DAYS.map(day => {
+        const cell = pos.d[day];
+        return { day, cell };
+      });
+
+      const oKind = offKind(pos.t);
+      const isRelief = oKind === 'relief' || oKind === 'dummy';
+
+      const row = document.createElement('div');
+      row.className = 'pos-row' + (isRelief ? ' relief-row' : '');
+
+      let typeLabel = pos.t || '';
+      let dayChips = '';
+
+      if (isRelief) {
+        dayChips = `<span class="pos-day-chip">${oKind === 'dummy' ? 'Dummy Relief' : 'Relief'} week</span>`;
+      } else {
+        dayChips = shifts.map(({ day, cell }) => {
+          if (!cell || cell.type === 'off') {
+            return `<span class="pos-day-chip">${day.substring(0,2)}</span>`;
+          }
+          const tc = typeClass(pos.t);
+          return `<span class="pos-day-chip work ${tc}">${day.substring(0,2)} ${cell.d || '?'}</span>`;
+        }).join('');
+      }
+
+      // Is this my position this week?
+      const myShift = getShiftForDate(anchor);
+      const myPos = myShift ? getPositionForDate(anchor) : null;
+      const isMe = myPos && myPos.p === pos.p;
+
+      row.innerHTML = `
+        <div class="pos-row-header">
+          <span class="pos-row-num">P${pos.p}</span>
+          <span class="pos-row-type">${typeLabel}</span>
+          ${isMe ? '<span style="font-size:10px;color:var(--accent-bright);font-weight:700;margin-left:auto;">YOU</span>' : ''}
+        </div>
+        <div class="pos-row-days">${dayChips}</div>
+      `;
+
+      // Tap to open swap modal for this position's week
+      row.addEventListener('click', () => {
+        state.currentView = 'week';
+        state.viewWeekAnchor = fmtISO(anchor);
+        document.querySelectorAll('.view-toggle button').forEach(b => {
+          b.classList.toggle('active', b.dataset.view === 'week');
+        });
+        renderMain();
+        // Pre-fill the swap modal with this position
+        const modal = openSwapModal(fmtISO(anchor));
+        setTimeout(() => {
+          const posInput = document.getElementById('sw-pos');
+          if (posInput) posInput.value = pos.p;
+        }, 150);
+      });
+
+      listEl.appendChild(row);
+    });
+  }
+
+  renderList('');
 }
 
 function updatePosPill(forDate) {
@@ -2765,7 +2962,7 @@ document.querySelectorAll('.view-toggle button').forEach(btn => {
 });
 
 function navigateTo(direction) {
-  if (state.currentView === 'swaps') return; // no navigation in swaps view
+  if (state.currentView === 'swaps' || state.currentView === 'positions') return;
   const weekView = document.getElementById('week-view');
   const monthView = document.getElementById('month-view');
   const activeView = state.currentView === 'week' ? weekView : monthView;
