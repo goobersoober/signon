@@ -1833,12 +1833,17 @@ function renderPositions() {
 
       const row = document.createElement('div');
       row.className = 'pos-row' + (isRelief ? ' relief-row' : '');
-      if (!isRelief) row.style.borderLeft = `3px solid ${borderColour}`;
+      if (isMe) {
+        row.style.border = '2px solid var(--accent)';
+        row.style.boxShadow = '0 0 0 1px var(--accent)';
+      } else if (!isRelief) {
+        row.style.borderLeft = `3px solid ${borderColour}`;
+      }
 
       // Build day columns
       let dayCols = '';
       if (isRelief) {
-        dayCols = `<div style="font-size:11px;font-weight:700;color:var(--accent-bright);padding:6px 0;">${oKind === 'dummy' ? 'DUMMY RELIEF' : 'RELIEF'}</div>`;
+        dayCols = ''; // type label in header is enough
       } else {
         dayCols = `<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:5px;">` +
           DAYS.map(day => {
@@ -1870,12 +1875,6 @@ function renderPositions() {
       `;
 
       row.addEventListener('click', () => {
-        state.currentView = 'week';
-        state.viewWeekAnchor = fmtISO(anchor);
-        document.querySelectorAll('.view-toggle button').forEach(b => {
-          b.classList.toggle('active', b.dataset.view === 'week');
-        });
-        renderMain();
         openSwapModal(fmtISO(anchor));
         setTimeout(() => {
           const posInput = document.getElementById('sw-pos');
